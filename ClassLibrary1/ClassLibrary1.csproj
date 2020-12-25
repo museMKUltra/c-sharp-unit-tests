@@ -39,6 +39,7 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="Class1.cs" />
+        <Compile Include="Fundamentals\Math.cs" />
         <Compile Include="Fundamentals\Reservation.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>
