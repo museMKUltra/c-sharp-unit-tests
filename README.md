@@ -1,11 +1,14 @@
 # GitHub
 [c-sharp-unit-tests](https://github.com/museMKUltra/c-sharp-unit-tests)
 
+# HackMD
+[Documents](https://hackmd.io/X61mGzQdTLObVizIZ1lDaw?view)
+
 # Unit Testing for C# Developers
 [Code with Mosh](https://codewithmosh.com/courses)
 
 ## Day15
-Getting Started 
+#### Getting Started 
 
 ### What is Automated Testing
 > The practice of writing code to test our code, and then run those tests in an automated fashion which is repeatable.
@@ -104,3 +107,135 @@ public class ReservationTests
 :::info
 In this course, we focus on the **code first** so that you can master the fundamentals of testing, then you will be ready to start **test first**.
 :::
+
+---
+#### Fundamentals of Unit Testing
+
+### Characteristics of Good Unit Tests
+* First-class citizens
+* Clean, readable and maintainable
+* No logic
+* Isolated
+* Not too specific/general
+
+### What to Test and What Not to Test
+> Testable code is clean, clean code is testable.
+
+Test **outcome** of the method
+* Query 
+    * Verify the function which returns right value
+    * You might have multiple executions, then you have to test all of them.
+* Command
+    * Verify the changes of system which perform an action
+        * Changing the statement of objects in memory
+        * Writing to the database
+        * Call the web server
+        * Sending the messages
+    * Such functions may return value as well
+
+**Don't** test
+* Language features
+* 3rd-party code
+
+### Naming and Organizing Tests
+> The name of your tests should clearly specify the business rule you're testing.
+* Test projects
+    * TestNinja -> TestNinja.UnitTests
+* Test classes
+    * Reservation -> ReservationTests
+* Test methods
+    * [MethodName]_ [Scenario]_ [ExpectedBehavior]
+* How many tests?
+    * Number of test >= Number of execution paths
+
+### Writing a Simple Unit Test
+```csharp
+public class Math
+{
+    public int Max(int a, int b)
+    {
+        return a > b ? a : b;
+    }
+}
+```
+```csharp
+[TestFixture]
+public class MathTests
+{
+    [Test]
+    public void Max_FirstArgumentIsGreater_ReturnTheFirstArguments()
+    {
+        var math = new Math();
+        
+        var result = math.Max(2, 1);
+
+        Assert.That(result, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Max_SecondArgumentIsGreater_ReturnTheSecondArguments()
+    {
+        var math = new Math();
+        
+        var result = math.Max(1, 2);
+
+        Assert.That(result, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Max_ArgumentsAreEqual_ReturnTheSameArgument()
+    {
+        var math = new Math();
+        
+        var result = math.Max(1, 1);
+
+        Assert.That(result, Is.EqualTo(1));
+    }
+}
+```
+
+### Basic Techniques
+* [SetUp] -> call that method before running each test
+* [TearDown] -> call that method after each test
+* [Ignore] -> comment out the test temporary
+
+### Black-box testing
+> Consider **possible situations** to test. For *Max* testing, there are three cases, greater than, less than, and equal, not just focus on max value.
+
+### Parameterized tests
+> A clean way to test **different cases** with multiple parameters so that you don't have to write lots of separated test cases.
+
+```csharp
+[TestFixture]
+public class MathTests
+{
+    private Math _math;
+    
+    [SetUp]
+    public void SetUp()
+    {
+        _math = new Math();
+    }
+    
+    [Test]
+    // [Ignore("ignoring message...")]
+    [TestCase(2, 1, 2)]
+    [TestCase(1, 2, 2)]
+    [TestCase(1, 1, 1)]
+    public void Max_WhenCalled_ReturnTheGreaterArgument(int a, int b, int expectedResult)
+    {
+        var result = _math.Max(a, b);
+
+        Assert.That(result, Is.EqualTo(expectedResult));
+    }
+}
+```
+:::info
+*NUnit* has a easier way for **parameterized test** than *MSTest* to use.
+:::
+
+### Trustworthy tests 
+> Without TDD, after your test passed, go to the production code and make a small change to **create a bug** temporary, if the test still pass, then you probably didn’t test the right thing.
+
+### Cost of Bugs
+> Focus on delivering **quality** software with less defects. Be **pragmatic** to choose the cost upfront by writing test, or pay a far greater cost to fix bugs after releasing your software.
