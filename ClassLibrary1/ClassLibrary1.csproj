@@ -39,6 +39,8 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="Class1.cs" />
+        <Compile Include="Fundamentals\CustomerController.cs" />
+        <Compile Include="Fundamentals\ErrorLogger.cs" />
         <Compile Include="Fundamentals\HtmlFormatter.cs" />
         <Compile Include="Fundamentals\Math.cs" />
         <Compile Include="Fundamentals\Reservation.cs" />

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ClassLibrary1.Fundamentals
 {
     public class Math
@@ -10,6 +12,13 @@ namespace ClassLibrary1.Fundamentals
         public int Max(int a, int b)
         {
             return a > b ? a : b;
+        }
+
+        public IEnumerable<int> GetOddNumbers(int limit)
+        {
+            for (var i = 1; i <= limit; i++)
+                if (i % 2 != 0)
+                    yield return i;
         }
     }
 }

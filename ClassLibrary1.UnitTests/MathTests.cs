@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using ClassLibrary1.Fundamentals;
 using NUnit.Framework;
 
@@ -40,7 +42,7 @@ namespace ClassLibrary1.UnitTests
 
             Assert.That(result, Is.EqualTo(2));
         }
-        
+
         [Test]
         [Ignore("please sleep a while...")]
         public void Max_ArgumentsAreEqual_ReturnTheSameArgument()
@@ -59,6 +61,25 @@ namespace ClassLibrary1.UnitTests
             var result = _math.Max(a, b);
 
             Assert.That(result, Is.EqualTo(expectedResult));
+        }
+
+        [Test]
+        public void GetOddNumbers_LimitIsGreaterThanZero_ReturnOddNumbersUpToLimit()
+        {
+            var result = _math.GetOddNumbers(5);
+
+            // too general
+            // Assert.That(result, Is.Not.Empty);
+            // Assert.That(result.Count(), Is.EqualTo(3));
+            // Assert.That(result, Does.Contain(1));
+            // Assert.That(result, Does.Contain(3));
+            // Assert.That(result, Does.Contain(5));
+
+            Assert.That(result, Is.EqualTo(new[] {1, 3, 5}));
+
+            // other useful assertions
+            // Assert.That(result, Is.Ordered);
+            // Assert.That(result, Is.Unique);
         }
     }
 }
