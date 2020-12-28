@@ -546,8 +546,8 @@ public class VideoService
     }
 }
 ```
-:::info
-*JsonConvert* is a class of *Newtonsoft.Json* namespace which is a package can be installed by **NuGet**.
+:::success
+*JsonConvert* is a class of **Newtonsoft.Json** namespace which is a package can be installed by **NuGet**.
 :::
 ```csharp
 public class VideoService
@@ -801,6 +801,9 @@ public class VideoServiceTests
 :::info
 If you want to test another **mock data** by *Read* method, then you can change the *Returns* directly rather than using the *FakeFileReader*.
 :::
+:::success
+**Moq** mocking framework also can be installed by **NuGet**.
+:::
 
 #### State-based vs Interaction Testing
 > Using *Interaction Testing* which test the **external behavior** not the implementation only when dealing with **external resources**, because that might refactor or restructure your code a lot or break other tests. So prefer *State-based Testing* to *Interaction Testing*.
@@ -851,3 +854,56 @@ Verify methods **called** inside execution of another method.
 #### Fake as Little as Possible
 > Use **mocks** as little as possible, only when dealing with **external resources**, otherwise unit tests might turn out to be explosion of interfaces and constructor parameters, also fat and fragile tests.
 
+#### An Example of a Mock Abuse
+```csharp
+public class Product
+{
+    public float ListPrice { get; set; }
+
+    public float GetPrice(ICustomer customer)
+    {
+        if (customer.IsGold)
+        {
+            return ListPrice * 0.7f;
+        }
+
+        return ListPrice;
+    }
+}
+```
+```csharp
+[TestFixture]
+public class ProductTests
+{
+    [Test]
+    public void GetPrice_GoldCustomer_Apply30PercentDiscount()
+    {
+        // this test is ideal
+        var product = new Product {ListPrice = 100};
+
+        var result = product.GetPrice(new Customer {IsGold = true});
+
+        Assert.That(result, Is.EqualTo(70));
+    }
+
+    [Test]
+    public void GetPrice_GoldCustomer_Apply30PercentDiscount2()
+    {
+        // this test is mock abuse
+        var customer = new Mock<ICustomer>();
+        customer.Setup(c => c.IsGold).Returns(true);
+        
+        var product = new Product {ListPrice = 100};
+
+        var result = product.GetPrice(customer.Object);
+
+        Assert.That(result, Is.EqualTo(70));
+    }
+}
+```
+:::info
+Try to write small, maintainable, reliable tests, and use **mocks** only when dealing with external resources to avoid a recipe for disaster.
+:::
+
+#### Who Should Write Tests
+> Writing *Unit* and *Integration tests* is the job of a **software developer**, but *End-to-End tests* don't care about internal implementation but focus on high level like an end user, so it probably written by **test engineer**.
