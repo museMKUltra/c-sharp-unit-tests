@@ -40,10 +40,13 @@
     <ItemGroup>
         <Compile Include="Class1.cs" />
         <Compile Include="Fundamentals\CustomerController.cs" />
+        <Compile Include="Fundamentals\DemeritPointsCalculator.cs" />
         <Compile Include="Fundamentals\ErrorLogger.cs" />
+        <Compile Include="Fundamentals\FizzBuzz.cs" />
         <Compile Include="Fundamentals\HtmlFormatter.cs" />
         <Compile Include="Fundamentals\Math.cs" />
         <Compile Include="Fundamentals\Reservation.cs" />
+        <Compile Include="Fundamentals\Stack.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>
     <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
