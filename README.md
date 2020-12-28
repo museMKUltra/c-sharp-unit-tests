@@ -513,3 +513,341 @@ The high coverage doesn't means that you have returned enough tests for methods,
 :::info
 Remember to consider about **black-box testing**, and verify the result by the public members rather than private ones. Also separate verification in different scenarios but **parameterized test** in the same scenario.
 :::
+
+## Day18
+
+### Breaking the External Dependencies
+
+#### Introduction
+> Unit tests should not touch **external resources** that is classified as an integration tests.
+
+#### Loosely-coupled and Testable Code
+> First of all, writing a testable code and isolate the part with external resources into separated classes that apply on **dependency injection** just like using `interface`.
+
+#### Refactoring Towards a Loosely-coupled Design
+```csharp
+public class Video
+{
+    public int Id { get; set; }
+    public string Title { get; set; }
+    public bool IsProcessed { get; set; }
+}
+
+public class VideoService
+{
+    public string ReadVideoTitle()
+    {
+        var str = File.ReadAllText("video.txt");
+        var video = JsonConvert.DeserializeObject<Video>(str);
+        if (video == null)
+            return "Error parsing the video.";
+
+        return video.Title;
+    }
+}
+```
+:::info
+*JsonConvert* is a class of *Newtonsoft.Json* namespace which is a package can be installed by **NuGet**.
+:::
+```csharp
+public class VideoService
+{
+    public string ReadVideoTitle()
+    {
+        // step1. isolate an class
+        var str = new FileReader().Read("video.txt"); 
+        var video = JsonConvert.DeserializeObject<Video>(str);
+        if (video == null)
+            return "Error parsing the video.";
+
+        return video.Title;
+    }
+}
+
+public class FileReader
+{
+    public string Read(string path)
+    {
+        return File.ReadAllText(path);
+    }
+}
+```
+:::info
+**Step.1** Refactor the code with external resource to an isolated class.
+:::
+```csharp
+// step2. extract an interface
+public interface IFileReader
+{
+    string Read(string path);
+}
+
+public class FileReader : IFileReader
+{
+    public string Read(string path)
+    {
+        return File.ReadAllText(path);
+    }
+}
+```
+:::info
+**Step2.** Declare an `interface` to define the members.
+:::
+```csharp
+// step3. create an fake class
+// or you can call it MockFileReader/StubFileReader
+public class FakeFileReader: IFileReader
+{
+    public string Read(string path)
+    {
+        return "";
+    }
+}
+```
+:::info
+**Step3.** Create an fake `class` to mock the members.
+:::
+
+#### Dependency Injection
+* via Method Parameters
+```csharp
+public class VideoService
+{
+    public string ReadVideoTitle(IFileReader fileReader)
+    {
+        var str = fileReader.Read("video.txt");
+        var video = JsonConvert.DeserializeObject<Video>(str);
+        if (video == null)
+            return "Error parsing the video.";
+
+        return video.Title;
+    }
+}
+```
+```csharp
+public class Program
+{
+    public static void Main()
+    {
+        var service = new VideoService();
+        // sending the parameter for production
+        var title = service.ReadVideoTitle(new FileReader());
+    }
+}
+
+[TestFixture]
+public class VideoServiceTests
+{
+    [Test]
+    public void ReadVideoTitle_EmptyFile_ReturnError()
+    {
+        var service = new VideoService();
+
+        // sending the parameter for testing
+        var result = service.ReadVideoTitle(new FakeFileReader());
+
+        Assert.That(result, Does.Contain("error").IgnoreCase);
+    }
+}
+```
+:::info
+Use **different parameters** to test by fake data without external resource.
+:::
+* via Properties
+```csharp
+public class VideoService
+    {
+        public IFileReader FileReader { get; set; }
+
+        public VideoService()
+        {
+            FileReader = new FileReader();
+        }
+
+        public string ReadVideoTitle()
+        {
+            // use the property
+            var str = FileReader.Read("video.txt");
+            var video = JsonConvert.DeserializeObject<Video>(str);
+            if (video == null)
+                return "Error parsing the video.";
+
+            return video.Title;
+        }
+    }
+```
+```csharp
+public class Program
+{
+    public static void Main()
+    {
+        var service = new VideoService();
+        var title = service.ReadVideoTitle(); // without parameter
+    }
+}
+
+[TestFixture]
+public class VideoServiceTests
+{
+    [Test]
+    public void ReadVideoTitle_EmptyFile_ReturnError()
+    {
+        var service = new VideoService();
+        // declare the property
+        service.FileReader = new FakeFileReader();
+
+        var result = service.ReadVideoTitle();
+        
+        Assert.That(result, Does.Contain("error").IgnoreCase);
+    }
+}
+```
+:::info
+Initialize property for production, then **set property** before testing.
+:::
+* via Constructor
+```csharp
+public class VideoService
+    {
+        private IFileReader _fileReader;
+
+        // constructor injection
+        public VideoService(IFileReader fileReader = null)
+        {
+            _fileReader = fileReader ?? new FileReader();
+        }
+
+        public string ReadVideoTitle()
+        {
+            var str = _fileReader.Read("video.txt");
+            var video = JsonConvert.DeserializeObject<Video>(str);
+            if (video == null)
+                return "Error parsing the video.";
+
+            return video.Title;
+        }
+    }
+```
+```csharp
+public class Program
+{
+    public static void Main()
+    {
+        var service = new VideoService();
+        var title = service.ReadVideoTitle();
+    }
+}
+
+[TestFixture]
+public class VideoServiceTests
+{
+    [Test]
+    public void ReadVideoTitle_EmptyFile_ReturnError()
+    {
+        // set fake by constructor
+        var service = new VideoService(new FakeFileReader());
+
+        var result = service.ReadVideoTitle();
+
+        Assert.That(result, Does.Contain("error").IgnoreCase);
+    }
+}
+```
+:::info
+Set the using class by **constructor injection**.
+:::
+* Frameworks
+    * NInject
+    * StructureMap
+    * Spring .NET
+    * Autofac
+    * Unity
+> **DI**(Dependency Injection) framework is a registry that contain your interfaces and implementation, and it will automatically take care of creating object graphs based on the interfaces and types registered.
+
+#### Mocking (Isolation) Frameworks
+* Frameworks
+    * Moq
+    * NSubstitute
+    * FakeItEasy
+    * Rhino Mocks
+> Help us **dynamically** create the objects of fake or mock data for testing.
+
+#### Creating Mock Objects Using Moq
+```csharp
+[TestFixture]
+public class VideoServiceTests
+{
+    private Mock<IFileReader> _fileReader;
+    private VideoService _videoService;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _fileReader = new Mock<IFileReader>();
+        _videoService = new VideoService(_fileReader.Object);
+    }
+
+    [Test]
+    public void ReadVideoTitle_EmptyFile_ReturnError()
+    {
+        _fileReader.Setup(fr => fr.Read("video.txt")).Returns("");
+
+        var result = _videoService.ReadVideoTitle();
+
+        Assert.That(result, Does.Contain("error").IgnoreCase);
+    }
+}
+```
+:::info
+If you want to test another **mock data** by *Read* method, then you can change the *Returns* directly rather than using the *FakeFileReader*.
+:::
+
+#### State-based vs Interaction Testing
+> Using *Interaction Testing* which test the **external behavior** not the implementation only when dealing with **external resources**, because that might refactor or restructure your code a lot or break other tests. So prefer *State-based Testing* to *Interaction Testing*.
+
+#### Testing the Interaction between Two Objects
+```csharp
+public class OrderService
+{
+    private readonly IStorage _storage;
+
+    public OrderService(IStorage storage)
+    {
+        _storage = storage;
+    }
+
+    public int PlaceOrder(Order order)
+    {
+        var orderId = _storage.Store(order);
+
+        // some other work
+
+        return orderId;
+    }
+}
+```
+```csharp
+[TestFixture]
+public class OrderServiceTests
+{
+    [Test]
+    public void PlaceOrder_WhenCalled_StoreTheOrder()
+    {
+        var storage = new Mock<IStorage>();
+        var orderService = new OrderService(storage.Object);
+
+        var order = new Order();
+        orderService.PlaceOrder(order);
+
+        // verify Store had been called after implementation of PlaceOrder 
+        storage.Verify(s => s.Store(order));
+    }
+}
+```
+:::info
+Verify methods **called** inside execution of another method.
+:::
+
+#### Fake as Little as Possible
+> Use **mocks** as little as possible, only when dealing with **external resources**, otherwise unit tests might turn out to be explosion of interfaces and constructor parameters, also fat and fragile tests.
+
