@@ -480,3 +480,36 @@ The high coverage doesn't means that you have returned enough tests for methods,
 * The only developer in the team
     * Educate your team to write cleaner and more testable code
     * [The Art of Writing Beautiful of C# code](https://codewithmosh.com/p/clean-code)
+
+### Exercises
+#### Source Codes
+* [Fundamentals](https://github.com/museMKUltra/c-sharp-unit-tests/tree/main/ClassLibrary1/Fundamentals)
+    * [FizzBuzz](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Fundamentals/FizzBuzz.cs)
+    * [DemeritPointsCalculator](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Fundamentals/DemeritPointsCalculator.cs)
+    * [Stack](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Fundamentals/Stack.cs)
+* [UnitTests](https://github.com/museMKUltra/c-sharp-unit-tests/tree/main/ClassLibrary1.UnitTests)
+    * [FizzBuzzTests](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1.UnitTests/FizzBuzzTests.cs)
+    * [DemeritPointsCalculatorTests](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1.UnitTests/DemeritPointsCalculatorTests.cs)
+    * [StackTests](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1.UnitTests/StackTests.cs)
+#### Scenarios
+* FizzBuzz
+    1. GetOutput_InputIsDivisibleBy3And5_ReturnFizzBuzz
+    2. GetOutput_InputIsDivisibleBy3Only_ReturnFizz
+    3. GetOutput_InputIsDivisibleBy5Only_ReturnBuzz
+    4. GetOutput_InputIsNotDivisibleBy3Or5_ReturnTheSameNumber
+* DemeritPointsCalculator
+    1. CalculateDemeritPoints_WhenCalled_ReturnDemeritPoints (multi-cases)
+    2. CalculateDemeritPoints_SpeedIsOutOfRange_ThrowArgumentOutOfRangeException (multi-cases)
+* Stack
+    1. Push_ArgIsNull_ThrowArgNullException
+    2. Push_ValidArg_AddObjectToTheStack
+    3. Count_EmptyStack_ReturnZero
+    4. Pop_EmptyStack_ThrowInvalidOperationException
+    5. Pop_StackWithAFewObjects_ReturnObjectOnTheTop
+    6. Pop_StackWithAFewObjects_RemoveObjectOnTheTop
+    7. Peek_EmptyStack_ThrowInvalidOperationException
+    8. Peek_StackWithObjects_ReturnObjectOnTheTop
+    9. Peek_StackWithObjects_DoesNotRemoveTheObjectOnTheTopOfTheStack
+:::info
+Remember to consider about **black-box testing**, and verify the result by the public members rather than private ones. Also separate verification in different scenarios but **parameterized test** in the same scenario.
+:::
