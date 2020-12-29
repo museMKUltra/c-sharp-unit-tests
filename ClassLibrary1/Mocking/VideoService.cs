@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace ClassLibrary1.Mocking
@@ -5,11 +7,13 @@ namespace ClassLibrary1.Mocking
     public class VideoService
     {
         private IFileReader _fileReader;
+        private IVideoRepository _videoRepository;
 
         // constructor injection
-        public VideoService(IFileReader fileReader = null)
+        public VideoService(IFileReader fileReader = null, IVideoRepository videoRepository = null)
         {
             _fileReader = fileReader ?? new FileReader();
+            _videoRepository = videoRepository ?? new VideoRepository();
         }
 
         public string ReadVideoTitle()
@@ -21,6 +25,26 @@ namespace ClassLibrary1.Mocking
                 return "Error parsing the video.";
 
             return video.Title;
+        }
+
+        public string GetUnprocessedVideoAsCsv()
+        {
+            var videoIds = new List<int>();
+
+            var videos = _videoRepository.GetUnprocessedVideos();
+            foreach (var v in videos) videoIds.Add(v.Id);
+
+            return String.Join(",", videoIds);
+        }
+    }
+
+    public class VideoContext : IDisposable
+    {
+        public List<Video> Videos { get; set; }
+
+        public void Dispose()
+        {
+            throw new NotImplementedException();
         }
     }
 
