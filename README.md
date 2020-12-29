@@ -907,3 +907,448 @@ Try to write small, maintainable, reliable tests, and use **mocks** only when de
 
 #### Who Should Write Tests
 > Writing *Unit* and *Integration tests* is the job of a **software developer**, but *End-to-End tests* don't care about internal implementation but focus on high level like an end user, so it probably written by **test engineer**.
+
+## Day19
+
+### Excercises
+
+#### Source Codes
+* [VideoService](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/VideoService.cs)
+* [VideoRepository](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/VideoRepository.cs)
+* [VideoServiceTests](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1.UnitTests/Mocking/VideoServiceTests.cs)
+
+```csharp
+// step0. original code
+public class VideoService
+{
+    public string GetUnprocessedVideoAsCsv()
+    {
+        var videoIds = new List<int>();
+
+        using (var context = new VideoContext())
+        {
+            var videos = (from video in context.Videos
+                where !video.IsProcessed
+                select video).ToList();
+
+            foreach (var v in videos) videoIds.Add(v.Id);
+
+            return String.Join(",", videoIds);
+        }
+    }
+}
+```
+
+```csharp
+// step1. refactor class
+public class VideoService
+{
+    public string GetUnprocessedVideoAsCsv()
+    {
+        var videoIds = new List<int>();
+
+        var videos = new VideoRepository().GetUnprocessedVideos();
+        foreach (var v in videos) videoIds.Add(v.Id);
+
+        return String.Join(",", videoIds);
+    }
+}
+
+public class VideoRepository
+{
+    public IEnumerable<Video> GetUnprocessedVideos()
+    {
+        using (var context = new VideoContext())
+        {
+            return (from video in context.Videos
+                where !video.IsProcessed
+                select video).ToList();
+        }
+    }
+}
+```
+
+
+```csharp
+// step2. create interface
+public interface IVideoRepository
+{
+    IEnumerable<Video> GetUnprocessedVideos();
+}
+
+public class VideoRepository : IVideoRepository
+{
+    public IEnumerable<Video> GetUnprocessedVideos()
+    {
+        using (var context = new VideoContext())
+        {
+            return (from video in context.Videos
+                where !video.IsProcessed
+                select video).ToList();
+        }
+    }
+}
+```
+
+```csharp
+// step3. dependency injection
+public class VideoService
+{
+    private IVideoRepository _videoRepository;
+
+    public VideoService(IVideoRepository videoRepository = null)
+    {
+        _videoRepository = videoRepository ?? new VideoRepository();
+    }
+        
+    public string GetUnprocessedVideoAsCsv()
+    {
+        var videoIds = new List<int>();
+
+        var videos = _videoRepository.GetUnprocessedVideos();
+        foreach (var v in videos) videoIds.Add(v.Id);
+
+        return String.Join(",", videoIds);
+    }
+}
+```
+
+```csharp
+// step4. writing tests
+[TestFixture]
+public class VideoServiceTests
+{
+    private Mock<IVideoRepository> _videoRepository;
+    private VideoService _videoService;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _videoRepository = new Mock<IVideoRepository>();
+        _videoService = new VideoService(_videoRepository.Object);
+    }
+
+    [Test]
+    public void GetUnprocessedVideoAsCsv_AllVideosAreProcessed_ReturnAnEmptyString()
+    {
+        _videoRepository.Setup(c => c.GetUnprocessedVideos()).Returns(new List<Video>());
+
+        var videos = _videoService.GetUnprocessedVideoAsCsv();
+
+        Assert.That(videos, Is.EqualTo(""));
+    }
+
+    [Test]
+    public void GetUnprocessedVideoAsCsv_AFewUnprocessedVideos_ReturnAStringWithIdOfUnprocessedVideos()
+    {
+        _videoRepository.Setup(c => c.GetUnprocessedVideos()).Returns(new List<Video>
+        {
+            new Video {Id = 1},
+            new Video {Id = 2},
+            new Video {Id = 3}
+        });
+
+        var videos = _videoService.GetUnprocessedVideoAsCsv();
+
+        Assert.That(videos, Is.EqualTo("1,2,3"));
+    }
+}
+```
+
+#### Source Codes
+* [InstallerHelper](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/InstallerHelper.cs)
+* [FileDownloader](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/FileDownloader.cs)
+* [InstallerHelperTests](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1.UnitTests/Mocking/InstallerHelperTests.cs)
+
+```csharp
+// step0. original code
+public class InstallerHelper
+{
+    private string _setupDestinationFile;
+
+    public bool DownloadInstaller(string customerName, string installerName)
+    {
+        var client = new WebClient();
+        try
+        {
+            client.DownloadFile(string.Format("http://example.com/{0}/{1}", customerName, installerName),
+                _setupDestinationFile);
+            return true;
+        }
+        catch (WebException)
+        {
+            return false;
+        }
+    }
+}
+```
+
+```csharp
+// step1. refactor class
+public class InstallerHelper
+{
+    private string _setupDestinationFile;
+
+    public bool DownloadInstaller(string customerName, string installerName)
+    {
+        try
+        {
+            new FileDownloader.DownloadFile(string.Format("http://example.com/{0}/{1}", customerName, installerName),
+                _setupDestinationFile);
+            return true;
+        }
+        catch (WebException)
+        {
+            return false;
+        }
+    }
+}
+
+public class FileDownloader
+{
+    public void DownloadFile(string url, string path)
+    {
+        var client = new WebClient();
+        client.DownloadFile(url, path);
+    }
+}
+```
+:::info
+`WebException` is the what we concern, other exceptions might need to do **other operations**, so don't need to be hidden to return false or test it.
+:::
+
+```csharp
+// step2. create interface
+public interface IFileDownloader
+{
+    void DownloadFile(string url, string path);
+}
+
+public class FileDownloader : IFileDownloader
+{
+    public void DownloadFile(string url, string path)
+    {
+        var client = new WebClient();
+        client.DownloadFile(url, path);
+    }
+}
+```
+
+```csharp
+// step3. dependency injection
+public class InstallerHelper
+{
+    private readonly IFileDownloader _fileDownloader;
+    private string _setupDestinationFile;
+
+    public InstallerHelper(IFileDownloader fileDownloader = null)
+    {
+        _fileDownloader = fileDownloader ?? new FileDownloader();
+    }
+
+    public bool DownloadInstaller(string customerName, string installerName)
+    {
+        try
+        {
+            _fileDownloader.DownloadFile(string.Format("http://example.com/{0}/{1}", customerName, installerName),
+                _setupDestinationFile);
+            return true;
+        }
+        catch (WebException)
+        {
+            return false;
+        }
+    }
+}
+```
+:::info
+if you use **DI** framework, then write the `_fileDownloader = fileDownloader;` is okay, don't need to use above *poor man's dependency injection approach*.
+:::
+
+```csharp
+// step4. writing tests
+[TestFixture]
+public class InstallerHelperTests
+{
+    private Mock<IFileDownloader> _fileDownloader;
+    private InstallerHelper _installerHelper;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _fileDownloader = new Mock<IFileDownloader>();
+        _installerHelper = new InstallerHelper(_fileDownloader.Object);
+    }
+
+    [Test]
+    public void DownloadInstaller_DownloadFail_ReturnFalse()
+    {
+        _fileDownloader.Setup(f => f.DownloadFile(It.IsAny<string>(), It.IsAny<string>()))
+            .Throws<WebException>();
+
+        var result = _installerHelper.DownloadInstaller("customer", "installer");
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void DownloadInstaller_DownloadCompletes_ReturnTrue()
+    {
+        var result = _installerHelper.DownloadInstaller("", "");
+
+        Assert.That(result, Is.True);
+    }
+}
+```
+:::info
+`It.IsAny` is used to ignore the arguments, otherwise you need set the arguments as the same as production code then it could test properly to throw the exception by `_fileDownloader.Setup(f => f.DownloadFile("http://example.com/customer/installer", null)).Throws<WebException>();`
+:::
+
+#### Source Codes
+* [EmployeeController](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/EmployeeController.cs)
+* [EmployeeStorage](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/EmployeeStorage.cs)
+* [EmployeeControllerTests](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1.UnitTests/Mocking/EmployeeControllerTests.cs)
+
+```csharp
+// step0. original code
+public class EmployeeController
+{
+    private EmployeeContext _db;
+
+    public EmployeeController()
+    {
+        _db = new EmployeeContext();
+    }
+
+    public ActionResult DeleteEmployee(int id)
+    {
+        var employee = _db.Employees.Find(id);
+        _db.Employees.Remove(employee);
+        _db.SaveChanges();
+        return RedirectToAction("Employees");
+    }
+
+    private ActionResult RedirectToAction(string employees)
+    {
+        return new RedirectResult();
+    }
+}
+```
+:::info
+We don't need to test `private` *RedirectToAction* method detail, it's purely responsible for implementation, so we can focus on what type it return.
+:::
+:::success
+Remember to install the namespace *System.Data.Entity.Repository* by **NuGet**.
+:::
+
+```csharp
+// step1. refactor class
+public class EmployeeStorage
+{
+    private readonly EmployeeContext _db;
+
+    public EmployeeStorage()
+    {
+        _db = new EmployeeContext();
+    }
+
+    public void DeleteEmployee(int id)
+    {
+        var employee = _db.Employees.Find(id);
+        if (employee == null) return;
+        _db.Employees.Remove(employee);
+        _db.SaveChanges();
+    }
+}
+```
+:::warning
+I refactor the class with the each methods `Find`, `Remove`, and `SaveChanges`, but it's not necessary. The `EmployeeStorage` should hide the details to publish `DeleteEmployee` is enough.
+:::
+
+```csharp
+// step2. create interface
+public interface IEmployeeStorage
+{
+    void DeleteEmployee(int id);
+}
+
+public class EmployeeStorage : IEmployeeStorage
+{
+    private readonly EmployeeContext _db;
+
+    public EmployeeStorage()
+    {
+        _db = new EmployeeContext();
+    }
+
+    public void DeleteEmployee(int id)
+    {
+        var employee = _db.Employees.Find(id);
+        if (employee == null) return;
+        _db.Employees.Remove(employee);
+        _db.SaveChanges();
+    }
+}
+```
+:::info
+Use `interface` to mock our external resources in unit tests.
+:::
+```csharp
+// step3. dependency injection
+public class EmployeeController
+{
+    private readonly IEmployeeStorage _storage;
+
+    public EmployeeController(IEmployeeStorage employeeStorage = null)
+    {
+        _storage = employeeStorage ?? new EmployeeStorage();
+    }
+
+    public ActionResult DeleteEmployee(int id)
+    {
+        _storage.DeleteEmployee(id);
+        return RedirectToAction("Employees");
+    }
+
+    private ActionResult RedirectToAction(string employees)
+    {
+        return new RedirectResult();
+    }
+}
+```
+:::info
+All the responsibility of external resources is encapsulated inside our `_storage`, the testing of details should belong to **End-to-End test**.
+:::
+
+```csharp
+// step4. writing tests
+[TestFixture]
+public class EmployeeControllerTests
+{
+    private Mock<IEmployeeStorage> _storage;
+    private EmployeeController _controller;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _storage = new Mock<IEmployeeStorage>();
+        _controller = new EmployeeController(_storage.Object);
+    }
+
+    [Test]
+    public void DeleteEmployee_WhenCalled_DeleteTheEmployeeFromDb()
+    {
+        _controller.DeleteEmployee(1);
+
+        _storage.Verify(s => s.DeleteEmployee(1));
+    }
+
+    [Test]
+    public void DeleteEmployee_WhenCalled_ReturnRedirectResult()
+    {
+        var result = _controller.DeleteEmployee(1);
+
+        Assert.That(result, Is.TypeOf<RedirectResult>());
+    }
+}
+```
