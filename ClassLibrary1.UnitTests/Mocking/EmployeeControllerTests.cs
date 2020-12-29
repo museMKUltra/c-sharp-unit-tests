@@ -5,7 +5,7 @@ using TestNinja.Mocking;
 namespace ClassLibrary1.UnitTests.Mocking
 {
     [TestFixture]
-    public class EmployeeStorageTests
+    public class EmployeeControllerTests
     {
         private Mock<IEmployeeStorage> _storage;
         private EmployeeController _controller;
