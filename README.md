@@ -1352,3 +1352,227 @@ public class EmployeeControllerTests
     }
 }
 ```
+
+## Day20
+
+### Project - Testing BookingHelper
+
+#### Source Codes
+* [BookingHelper](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/BookingHelper.cs)
+* [BookingRepository](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1/Mocking/BookingRepository.cs)
+* [BookingHelperTests](https://github.com/museMKUltra/c-sharp-unit-tests/blob/main/ClassLibrary1.UnitTests/Mocking/BookingHelperTests.cs)
+
+#### Introduction
+```csharp
+public static class BookingHelper
+{
+    public static string OverlappingBookingsExist(Booking booking)
+    {
+        if (booking.Status == "Cancelled")
+            return string.Empty;
+
+        var unitOfWork = new UnitOfWork();
+        var bookings =
+            unitOfWork.Query<Booking>()
+                .Where(
+                    b => b.Id != booking.Id && b.Status != "Cancelled");
+
+        var overlappingBooking =
+            bookings.FirstOrDefault(
+                b =>
+                    booking.ArrivalDate >= b.ArrivalDate
+                    && booking.ArrivalDate < b.DepartureDate
+                    || booking.DepartureDate > b.ArrivalDate
+                    && booking.DepartureDate <= b.DepartureDate);
+
+        return overlappingBooking == null ? string.Empty : overlappingBooking.Reference;
+    }
+}
+```
+
+#### Test Cases
+* BookingStartsAndFinishesBeforeAnExistingBooking_ReturnEmptyString
+* BookingStartsAndFinishesAfterAnExistingBooking_ReturnEmptyString
+* BookingStartsAndFinishesInTheMiddleOfAnExistingBooking_ReturnExistingBookingReference
+* BookingStartsBeforeAndFinishesAfterAnExistingBooking_ReturnExistingBookingReference
+* BookingStartsBeforeAndFinishesInTheMiddleOfAnExistingBooking_ReturnExistingBookingReference
+* BookingStartsInTheMiddleOfAnExistingBookingButFinishesAfter_ReturnExistingBookingReference
+* BookingsOverlapButNewBookingIsCancelled_ReturnAnEmptyString
+
+#### Extracting IBookingRepository
+```csharp
+public static class BookingHelper
+{
+    public static string OverlappingBookingsExist(Booking booking, IBookingRepository repository )
+    {
+        if (booking.Status == "Cancelled")
+            return string.Empty;
+
+        var bookings = repository.GetActiveBookings(booking.Id);
+        
+        var overlappingBooking = bookings.FirstOrDefault(
+            b =>
+                booking.ArrivalDate >= b.ArrivalDate
+                && booking.ArrivalDate < b.DepartureDate
+                || booking.DepartureDate > b.ArrivalDate
+                && booking.DepartureDate <= b.DepartureDate);
+
+        return overlappingBooking == null ? string.Empty : overlappingBooking.Reference;
+    }
+}
+
+public interface IBookingRepository
+{
+    IQueryable<Booking> GetActiveBookings(int? excludedBookingId = null);
+}
+
+public class BookingRepository : IBookingRepository
+{
+    public IQueryable<Booking> GetActiveBookings(int? excludedBookingId = null)
+    {
+        var unitOfWork = new UnitOfWork();
+
+        var bookings = unitOfWork.Query<Booking>()
+            .Where(b => b.Status != "Cancelled");
+        if (excludedBookingId.HasValue)
+            bookings = bookings.Where(b => b.Id != excludedBookingId.Value);
+
+        return bookings;
+    }
+}
+```
+
+#### Writing the First Test
+```csharp
+[TestFixture]
+public class BookingHelper_OverlappingBookingsExistTests
+{
+    [Test]
+    public void BookingStartsAndFinishesBeforeAnExistingBooking_ReturnEmptyString()
+    {
+        var repository = new Mock<IBookingRepository>();
+        repository.Setup(r => r.GetActiveBookings(1)).Returns(new List<Booking>
+        {
+            new Booking
+            {
+                Id = 2,
+                ArrivalDate = new DateTime(2020, 12, 12, 12, 0, 0),
+                DepartureDate = new DateTime(2020, 12, 20, 12, 0, 0),
+                Reference = "a"
+            }
+        }.AsQueryable());
+
+        var result = BookingHelper.OverlappingBookingsExist(
+            new Booking {
+                Id = 1,
+                ArrivalDate = new DateTime(2020, 12, 10, 12, 0, 0),
+                DepartureDate = new DateTime(2020, 12, 11, 12, 0, 0),
+            }
+            , repository.Object);
+
+        Assert.That(result, Is.Empty);
+    }
+}
+```
+
+#### Refactoring
+```csharp
+[TestFixture]
+public class BookingHelper_OverlappingBookingsExistTests
+{
+    private Booking _existingBooking;
+    private Mock<IBookingRepository> _repository;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _existingBooking = new Booking
+            {Id = 2, ArrivalDate = ArriveOn(2020, 12, 12), DepartureDate = DepartOn(2020, 12, 20), Reference = "a"};
+        _repository = new Mock<IBookingRepository>();
+        _repository.Setup(r => r.GetActiveBookings(1)).Returns(new List<Booking> {_existingBooking}.AsQueryable());
+    }
+    
+    [Test]
+    public void BookingStartsAndFinishesBeforeAnExistingBooking_ReturnEmptyString()
+    {
+        var result = BookingHelper.OverlappingBookingsExist(new Booking
+        {
+            Id = 1,
+            ArrivalDate = Before(_existingBooking.ArrivalDate, days: 2),
+            DepartureDate = Before(_existingBooking.ArrivalDate)
+        }, _repository.Object);
+
+        Assert.That(result, Is.Empty);
+    }
+
+    private static DateTime Before(DateTime dateTime, int days = 1)
+    {
+        return dateTime.AddDays(-days);
+    }
+
+
+    private static DateTime After(DateTime dateTime, int days = 1)
+    {
+        return dateTime.AddDays(days);
+    }
+
+    private static DateTime DepartOn(int year, int month, int day)
+    {
+        return new DateTime(year, month, day, 12, 0, 0);
+    }
+
+    private static DateTime ArriveOn(int year, int month, int day)
+    {
+        return new DateTime(year, month, day, 12, 0, 0);
+    }
+}
+```
+
+#### Fixing a Bug
+```csharp
+public static string OverlappingBookingsExist(Booking booking, IBookingRepository repository)
+{
+    if (booking.Status == "Cancelled")
+        return string.Empty;
+
+    var bookings = repository.GetActiveBookings(booking.Id);
+    
+    // https://stackoverflow.com/questions/13513932/algorithm-to-detect-overlapping-periods
+    var overlappingBooking = bookings.FirstOrDefault(
+        b =>
+            booking.ArrivalDate < b.DepartureDate
+            && b.ArrivalDate < booking.DepartureDate);
+            
+    return overlappingBooking == null ? string.Empty : overlappingBooking.Reference;
+}
+
+[Test]
+public void BookingStartsBeforeAndFinishesAfterAnExistingBooking_ReturnExistingBookingReference()
+{
+    var result = BookingHelper.OverlappingBookingsExist(new Booking
+    {
+        Id = 1,
+        ArrivalDate = Before(_existingBooking.ArrivalDate),
+        DepartureDate = After(_existingBooking.DepartureDate),
+    }, _repository.Object);
+
+    Assert.That(result, Is.EqualTo(_existingBooking.Reference));
+}
+```
+
+#### Writing Additional Tests
+```csharp
+[Test]
+public void BookingsOverlapButNewBookingIsCancelled_ReturnAnEmptyString()
+{
+    var result = BookingHelper.OverlappingBookingsExist(new Booking
+    {
+        Id = 1,
+        ArrivalDate = Before(_existingBooking.ArrivalDate),
+        DepartureDate = After(_existingBooking.DepartureDate),
+        Status = "Cancelled"
+    }, _repository.Object);
+
+    Assert.That(result, Is.Empty);
+}
+```
