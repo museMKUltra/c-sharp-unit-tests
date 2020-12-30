@@ -1,4 +1,4 @@
-namespace TestNinja.Mocking
+namespace ClassLibrary1.Mocking
 {
     public interface IEmployeeStorage
     {

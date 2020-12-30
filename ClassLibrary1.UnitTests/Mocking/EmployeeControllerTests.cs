@@ -1,6 +1,6 @@
+using ClassLibrary1.Mocking;
 using Moq;
 using NUnit.Framework;
-using TestNinja.Mocking;
 
 namespace ClassLibrary1.UnitTests.Mocking
 {
