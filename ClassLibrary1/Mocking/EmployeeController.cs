@@ -1,5 +1,4 @@
 using System.Data.Entity;
-using TestNinja.Mocking;
 
 namespace ClassLibrary1.Mocking
 {
