@@ -1576,3 +1576,497 @@ public void BookingsOverlapButNewBookingIsCancelled_ReturnAnEmptyString()
     Assert.That(result, Is.Empty);
 }
 ```
+
+## Day21
+
+### Project - HouseKeeperHelper
+
+#### Introduction
+```csharp
+public static class HousekeeperHelper
+{
+    private static readonly UnitOfWork UnitOfWork = new UnitOfWork();
+
+    public static bool SendStatementEmails(DateTime statementDate)
+    {
+        var housekeepers = UnitOfWork.Query<Housekeeper>();
+
+        foreach (var housekeeper in housekeepers)
+        {
+            if (housekeeper.Email == null)
+                continue;
+
+            var statementFilename = SaveStatement(housekeeper.Oid, housekeeper.FullName, statementDate);
+
+            if (string.IsNullOrWhiteSpace(statementFilename))
+                continue;
+
+            var emailAddress = housekeeper.Email;
+            var emailBody = housekeeper.StatementEmailBody;
+
+            try
+            {
+                EmailFile(emailAddress, emailBody, statementFilename,
+                    string.Format("Sandpiper Statement {0:yyyy-MM} {1}", statementDate, housekeeper.FullName));
+            }
+            catch (Exception e)
+            {
+                XtraMessageBox.Show(e.Message, string.Format("Email failure: {0}", emailAddress),
+                    MessageBoxButtons.OK);
+            }
+        }
+
+        return true;
+    }
+
+    private static string SaveStatement(int housekeeperOid, string housekeeperName, DateTime statementDate)
+    {
+        var report = new HousekeeperStatementReport(housekeeperOid, statementDate);
+
+        if (!report.HasData)
+            return string.Empty;
+
+        report.CreateDocument();
+
+        var filename = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            string.Format("Sandpiper Statement {0:yyyy-MM} {1}.pdf", statementDate, housekeeperName));
+
+        report.ExportToPdf(filename);
+
+        return filename;
+    }
+
+    private static void EmailFile(string emailAddress, string emailBody, string filename, string subject)
+    {
+        var client = new SmtpClient(SystemSettingsHelper.EmailSmtpHost)
+        {
+            Port = SystemSettingsHelper.EmailPort,
+            Credentials =
+                new NetworkCredential(
+                    SystemSettingsHelper.EmailUsername,
+                    SystemSettingsHelper.EmailPassword)
+        };
+
+        var from = new MailAddress(SystemSettingsHelper.EmailFromEmail, SystemSettingsHelper.EmailFromName,
+            Encoding.UTF8);
+        var to = new MailAddress(emailAddress);
+
+        var message = new MailMessage(from, to)
+        {
+            Subject = subject,
+            SubjectEncoding = Encoding.UTF8,
+            Body = emailBody,
+            BodyEncoding = Encoding.UTF8
+        };
+
+        message.Attachments.Add(new Attachment(filename));
+        client.Send(message);
+        message.Dispose();
+
+        File.Delete(filename);
+    }
+}
+```
+
+#### Refactoring for Testability
+```csharp
+public class HousekeeperHelper
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IStatementGenerator _statementGenerator;
+    private readonly IEmailSender _emailSender;
+    private readonly IXtraMessageBox _messageBox;
+
+    // isolate classes which depend on external resources with interface
+    public HousekeeperHelper(
+        IUnitOfWork unitOfWork,
+        IStatementGenerator statementGenerator,
+        IEmailSender emailSender,
+        IXtraMessageBox messageBox)
+    {
+        _unitOfWork = unitOfWork;
+        _statementGenerator = statementGenerator;
+        _emailSender = emailSender;
+        _messageBox = messageBox;
+    }
+
+    public bool SendStatementEmails(DateTime statementDate)
+    {
+        var housekeepers = _unitOfWork.Query<Housekeeper>();
+
+        foreach (var housekeeper in housekeepers)
+        {
+            if (housekeeper.Email == null)
+                continue;
+
+            var statementFilename =
+                _statementGenerator.SaveStatement(housekeeper.Oid, housekeeper.FullName, statementDate);
+
+            if (string.IsNullOrWhiteSpace(statementFilename))
+                continue;
+
+            var emailAddress = housekeeper.Email;
+            var emailBody = housekeeper.StatementEmailBody;
+
+            try
+            {
+                _emailSender.EmailFile(emailAddress, emailBody, statementFilename,
+                    string.Format("Sandpiper Statement {0:yyyy-MM} {1}", statementDate, housekeeper.FullName));
+            }
+            catch (Exception e)
+            {
+                _messageBox.Show(e.Message, string.Format("Email failure: {0}", emailAddress),
+                    MessageBoxButtons.OK);
+            }
+        }
+
+        return true;
+    }
+}
+
+public interface IStatementGenerator
+{
+    string SaveStatement(int housekeeperOid, string housekeeperName, DateTime statementDate);
+}
+
+public class StatementGenerator : IStatementGenerator
+{
+    public string SaveStatement(int housekeeperOid, string housekeeperName, DateTime statementDate)
+    {
+        var report = new HousekeeperStatementReport(housekeeperOid, statementDate);
+
+        if (!report.HasData)
+            return string.Empty;
+
+        report.CreateDocument();
+
+        var filename = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            string.Format("Sandpiper Statement {0:yyyy-MM} {1}.pdf", statementDate, housekeeperName));
+
+        report.ExportToPdf(filename);
+
+        return filename;
+    }
+}
+
+public interface IEmailSender
+{
+    void EmailFile(string emailAddress, string emailBody, string filename, string subject);
+}
+
+public class EmailSender : IEmailSender
+{
+    public void EmailFile(string emailAddress, string emailBody, string filename, string subject)
+    {
+        var client = new SmtpClient(SystemSettingsHelper.EmailSmtpHost)
+        {
+            Port = SystemSettingsHelper.EmailPort,
+            Credentials =
+                new NetworkCredential(
+                    SystemSettingsHelper.EmailUsername,
+                    SystemSettingsHelper.EmailPassword)
+        };
+
+        var from = new MailAddress(SystemSettingsHelper.EmailFromEmail, SystemSettingsHelper.EmailFromName,
+            Encoding.UTF8);
+        var to = new MailAddress(emailAddress);
+
+        var message = new MailMessage(from, to)
+        {
+            Subject = subject,
+            SubjectEncoding = Encoding.UTF8,
+            Body = emailBody,
+            BodyEncoding = Encoding.UTF8
+        };
+
+        message.Attachments.Add(new Attachment(filename));
+        client.Send(message);
+        message.Dispose();
+
+        File.Delete(filename);
+    }
+}
+```
+
+#### Fixing a Design Issue
+```csharp
+// no need to always return boolean true, set a void function
+public void SendStatementEmails(DateTime statementDate)
+{
+    var housekeepers = _unitOfWork.Query<Housekeeper>();
+
+    foreach (var housekeeper in housekeepers)
+    {
+        if (housekeeper.Email == null)
+            continue;
+
+        var statementFilename =
+            _statementGenerator.SaveStatement(housekeeper.Oid, housekeeper.FullName, statementDate);
+        if (string.IsNullOrWhiteSpace(statementFilename))
+            continue;
+
+        var emailAddress = housekeeper.Email;
+        var emailBody = housekeeper.StatementEmailBody;
+
+        try
+        {
+            _emailSender.EmailFile(emailAddress, emailBody, statementFilename,
+                string.Format("Sandpiper Statement {0:yyyy-MM} {1}", statementDate, housekeeper.FullName));
+        }
+        catch (Exception e)
+        {
+            _messageBox.Show(e.Message, string.Format("Email failure: {0}", emailAddress),
+                MessageBoxButtons.OK);
+        }
+    }
+}
+```
+
+#### An Alternative Solution
+> In the last lecture, I argued that the return type of this method should be void because it always returns true.
+>
+> Later, however, I realized that it would actually be better to keep the return type as boolean and write a unit test for the scenario where the download fails. In that test, we assert that the method under test should return false.
+>
+> Obviously, this test will fail because the method under test always returns true. This is an indication of a bug in the production code and our unit test helps us find it.
+>
+> This is another case where you should think of your methods as block boxes when unit testing them. Don’t write tests based on the existing implementation because the exiting implementation may be incomplete and/or have a bug. Treat the method under test as a black box, give it different inputs and verify that the outcome is correct. 
+>
+> by Mosh
+
+#### Writing the First Interaction Test
+```csharp
+[TestFixture]
+public class HousekeeperServiceTests
+{
+    var unitOfWork = new Mock<IUnitOfWork>();
+    unitOfWork.Setup(uow => uow.Query<Housekeeper>()).Returns(new List<Housekeeper>
+    {
+        new Housekeeper {Email = "a", Oid = 1, FullName = "b", StatementEmailBody = "c"}
+    }.AsQueryable());
+
+    var statementGenerator = new Mock<IStatementGenerator>();
+    var emailSender = new Mock<IEmailSender>();
+    var messageBox = new Mock<IXtraMessageBox>();
+
+    var service = new HousekeeperService(
+        unitOfWork.Object,
+        statementGenerator.Object,
+        emailSender.Object,
+        messageBox.Object);
+
+    service.SendStatementEmails(new DateTime(2020, 12, 12));
+
+    statementGenerator.Verify(sg => sg.SaveStatement(1, "b", new DateTime(2020, 12, 12)));
+}
+```
+:::warning
+The class of project is more high level that contain multiple different implementations such as *statementGenerator*, *emailSender*, and *messageBox*, so rename the class **HousekeeperHelper** to **HousekeeperService**.
+:::
+
+#### Keeping Tests Clean
+```csharp
+[TestFixture]
+public class HousekeeperServiceTests
+{
+    private HousekeeperService _service;
+    private Mock<IStatementGenerator> _statementGenerator;
+    private Mock<IEmailSender> _emailSender;
+    private Mock<IXtraMessageBox> _messageBox;
+    private Housekeeper _houseKeeper;
+    private readonly DateTime _statementDate = new DateTime(2020, 12, 12);
+
+    [SetUp]
+    public void SetUp()
+    {
+        _houseKeeper = new Housekeeper {Email = "a", Oid = 1, FullName = "b", StatementEmailBody = "c"};
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(uow => uow.Query<Housekeeper>()).Returns(new List<Housekeeper>
+            {_houseKeeper}.AsQueryable());
+
+        _statementGenerator = new Mock<IStatementGenerator>();
+        _emailSender = new Mock<IEmailSender>();
+        _messageBox = new Mock<IXtraMessageBox>();
+        _service = new HousekeeperService(
+            unitOfWork.Object,
+            _statementGenerator.Object,
+            _emailSender.Object,
+            _messageBox.Object);
+    }
+
+    [Test]
+    public void SendStatementEmails_WhenCalled_GenerateStatements()
+    {
+        _service.SendStatementEmails(_statementDate);
+
+        _statementGenerator.Verify(sg => sg.SaveStatement(_houseKeeper.Oid, _houseKeeper.FullName, _statementDate));
+    }
+}
+```
+
+#### Testing that a Method is Not Called
+```csharp
+public void SendStatementEmails(DateTime statementDate)
+{
+    ...
+    foreach (var housekeeper in housekeepers)
+    {
+        // fix condition not only for null
+        if (string.IsNullOrWhiteSpace(housekeeper.Email))
+            continue;
+        ...
+    }
+    ...
+}
+
+[TestFixture]
+public class HousekeeperServiceTests
+{
+    ...
+    [Test]
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase(" ")]
+    public void SendStatementEmails_HouseKeepersEmailIsNullOrWhiteSpace_ShouldNotGenerateStatements(string email)
+    {
+        _houseKeeper.Email = email;
+
+        _service.SendStatementEmails(_statementDate);
+
+        _statementGenerator.Verify(sg => sg.SaveStatement(_houseKeeper.Oid, _houseKeeper.FullName, _statementDate), Times.Never);
+    }
+}
+```
+
+#### Another Interaction Test
+```csharp
+[Test]
+public void SendStatementEmails_WhenCalled_EmailTheStatement()
+{
+    _statementGenerator
+        .Setup(sg => sg.SaveStatement(_houseKeeper.Oid, _houseKeeper.FullName, _statementDate))
+        .Returns(_statementFileName);
+
+    _service.SendStatementEmails(_statementDate);
+
+    _emailSender.Verify(es => es.EmailFile(
+        _houseKeeper.Email,
+        _houseKeeper.StatementEmailBody,
+        _statementFileName,
+        It.IsAny<string>()));
+}
+        
+[Test]
+[TestCase(null)]
+[TestCase("")]
+[TestCase(" ")]
+public void SendStatementEmails_StatementFileNameIsNullOrWhiteSpace_ShouldNotEmailTheStatement(string fileName)
+{
+    _statementGenerator
+        .Setup(sg => sg.SaveStatement(_houseKeeper.Oid, _houseKeeper.FullName, _statementDate))
+        .Returns(fileName);
+
+    _service.SendStatementEmails(_statementDate);
+
+    _emailSender.Verify(es => es.EmailFile(
+        It.IsAny<string>(),
+        It.IsAny<string>(),
+        It.IsAny<string>(),
+        It.IsAny<string>()),
+        Times.Never);
+}
+```
+
+#### Extracting Helper Methods
+```csharp
+[TestFixture]
+public class HousekeeperServiceTests
+{
+    ...
+    private string _statementFileName;
+
+    [SetUp]
+    public void SetUp()
+    {
+        ...
+        _statementFileName = "fileName";
+        _statementGenerator = new Mock<IStatementGenerator>();
+        _statementGenerator
+            .Setup(sg => sg.SaveStatement(_houseKeeper.Oid, _houseKeeper.FullName, _statementDate))
+            .Returns(() => _statementFileName);
+        // use lambda expression let you can set fileName first, then execute the returns function
+        ...
+    }
+
+    private void VerifyEmailSent()
+    {
+        _emailSender.Verify(es => es.EmailFile(
+            _houseKeeper.Email,
+            _houseKeeper.StatementEmailBody,
+            _statementFileName,
+            It.IsAny<string>()));
+    }
+
+    private void VerifyEmailNotSent()
+    {
+        _emailSender.Verify(es => es.EmailFile(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Test]
+    public void SendStatementEmails_WhenCalled_EmailTheStatement()
+    {
+        _service.SendStatementEmails(_statementDate);
+
+        VerifyEmailSent();
+    }
+
+    [Test]
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase(" ")]
+    public void SendStatementEmails_StatementFileNameIsNullOrWhiteSpace_ShouldNotEmailTheStatement(string fileName)
+    {
+        _statementFileName = fileName;
+
+        _service.SendStatementEmails(_statementDate);
+
+        VerifyEmailNotSent();
+    }
+}
+```
+:::info
+This is what you call proper *Unit Tests* that is **short**, **clean**, and **fast**, if you maintain too many lines in unit test that will slow you down, break easily, and take you more time to figure out what is going on.
+:::
+
+#### Testing Exceptions
+```csharp
+private void VerifyMessageBoxDisplay()
+{
+    _messageBox.Verify(mb => mb.Show(
+        It.IsAny<string>(),
+        It.IsAny<string>(),
+        It.IsAny<MessageBoxButtons>()));
+}
+
+[Test]
+public void SendStatementEmails_EmailSendingFails_DisplayAMessageBox()
+{
+    _emailSender.Setup(es => es.EmailFile(
+        It.IsAny<string>(),
+        It.IsAny<string>(),
+        It.IsAny<string>(),
+        It.IsAny<string>())
+    ).Throws<Exception>();
+
+    _service.SendStatementEmails(_statementDate);
+
+    VerifyMessageBoxDisplay();
+}
+```
